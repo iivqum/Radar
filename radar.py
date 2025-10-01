@@ -108,60 +108,29 @@ radar = radar_model()
 radar.set_transmit_power(30)
 radar.set_antenna_gain(20)
 radar.set_frequency(440e6)
-
-print(radar.get_range_estimate(radar.get_min_rx_power()))
-
-
-"""
-        
-adc_bits = 12
-adc_fullscale = 2
-adc_resolution = adc_fullscale / (2**adc_bits)
-adc_gain = 1000
-
-# Peak input voltages
-adc_max_input = adc_fullscale / adc_gain
-adc_min_input = (adc_resolution * 0.5) / adc_gain
-adc_dynamic_range = 20 * math.log10(adc_max_input / adc_min_input)
-
-max_rx_power = volt_to_dbm(adc_max_input)
-min_rx_power = volt_to_dbm(adc_min_input)
-
-tx_power = 30
-
-max_range = radar_range(min_rx_power, tx_power, 0.75, 10, 20)
-min_range = radar_range(max_rx_power, tx_power, 0.75, 10, 20)
-    
-print("Gain = ", adc_gain, " Min range: ", min_range, " Max Range :", max_range, " DR = ", adc_dynamic_range, " Ratio = ", max_range / min_range)
+radar.set_adc_bits(12)
+radar.set_adc_fullscale(2)
 
 num_points = 1000
-
 xpoints = np.empty(num_points)
 ypoints = np.empty(num_points)
 ypoints2 = np.empty(num_points)
 
-step = adc_gain / num_points
+step = 30 / num_points
 
 for i in range(0, num_points):
     gain = step * (i + 1)
 
-    adc_max_input = adc_fullscale / gain
-    adc_min_input = (adc_resolution * 0.5) / gain
-    adc_dynamic_range = 20 * math.log10(adc_max_input / adc_min_input)
-
-    max_rx_power = volt_to_dbm(adc_max_input)
-    min_rx_power = volt_to_dbm(adc_min_input)
-
-    tx_power = 17
-
-    max_range = radar_range(min_rx_power, tx_power, 0.125, 10, 10)
-    min_range = radar_range(max_rx_power, tx_power, 0.125, 10, 10)
-
-    xpoints[i] = 10 * math.log10(gain)
+    radar.set_adc_gain(gain)
+    
+    min_range = radar.get_range_estimate(radar.get_max_rx_power())
+    max_range = radar.get_range_estimate(radar.get_min_rx_power())
+    
+    xpoints[i] = gain
     ypoints[i] = min_range
-    ypoints2[i] = max_range    
-
-plt.title("Minimum and maximum radar range as a function of IF gain.\n 12 bit ADC, full-scale = 2V, Ptx = 17 dBm")
+    ypoints2[i] = max_range
+    
+plt.title("Minimum and maximum radar range as a function of (noiseless) IF gain.\n 12 bit ADC, full-scale = 2V, Ptx = 30 dBm.")
 plt.xlabel("Gain (dB)")
 plt.ylabel("Minimum range (m)")
 plt.plot(xpoints, ypoints)
@@ -169,4 +138,3 @@ plt.twinx()
 plt.ylabel("Maximum range (m)")
 plt.plot(xpoints, ypoints2)
 plt.show()
-"""
