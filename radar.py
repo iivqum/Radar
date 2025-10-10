@@ -16,14 +16,10 @@ def dbm_to_volt(dbm):
     return math.sqrt(dbm_to_w(dbm) * 50)
   
 def db_to_linear(db):
-    return 10 ** (db / 10)
+    return 10 ** (db / 20)
   
 def volt_to_dbm(v_peak):
     return w_to_dbm((v_peak / math.sqrt(2)) ** 2 / 50)
-    
-def noise_power(temp, bandwidth):
-    boltz = 1.38 * 10 ** (-23)
-    return w_to_dbm(boltz * temp * bandwidth)
     
 def rms_to_peak(rms):
     return rms * math.sqrt(2)
@@ -53,7 +49,7 @@ class radar_model:
             print("Receive power is greater than transmit power!")
             
         wavelength = WAVE_VELOCITY / self.frequency
-        result = dbm_to_w(self.transmit_power) * db_to_linear(self.antenna_gain) ** 2 * wavelength ** 2 * \
+        result = dbm_to_w(self.transmit_power) * (10 ** (self.antenna_gain / 10)) ** 2 * wavelength ** 2 * \
             self.target_cross_section / ((4 * math.pi)**3 * dbm_to_w(rx_power_dbm))
             
         return result ** (1/4)        
@@ -70,6 +66,11 @@ class radar_model:
     def get_adc_dynamic_range(self):
         return 20 * math.log10(self.adc_fullscale / self.get_adc_resolution() * 0.5)
     
+    def get_enob(self):
+        noise_voltage = dbm_to_volt(self.get_noise_power(300)) * math.sqrt(2)
+    
+        return noise_voltage / (self.get_adc_resolution() * 0.5)
+    
     def get_max_rx_power(self):
         return volt_to_dbm(self.get_adc_max_input())
  
@@ -77,7 +78,10 @@ class radar_model:
         return volt_to_dbm(self.get_adc_min_input())
  
     def get_noise_power(self, kelvin):
-        return w_to_dbm(BOLTZMAN_CONSTANT * kelvin * self.bandwidth)        
+        return w_to_dbm(BOLTZMAN_CONSTANT * kelvin * self.bandwidth)       
+
+    def get_wavelength(self):
+        return WAVE_VELOCITY / self.frequency
     
     def set_frequency(self, frequency):
         self.frequency = frequency
@@ -97,26 +101,81 @@ class radar_model:
     def set_antenna_gain(self, gain):
         self.antenna_gain = gain
         
-    def set_receive_bandwidth(self, bandwidth):
+    def set_bandwidth(self, bandwidth):
         self.bandwidth = bandwidth
         
     def set_target_cross_section(self, cross_section):
         self.target_cross_section = cross_section
+        
+class radar_model_fmcw(radar_model):
+    def __init__(self):
+        super().__init__()
+        
+        self.chirp_frequency = 1000
+        self.chirps = 10
+        
+    def get_if(self, max_range):
+        return self.chirp_frequency * 2 * max_range * self.bandwidth / (WAVE_VELOCITY)
 
+    def get_range_resolution(self):
+        return WAVE_VELOCITY / (2 * self.bandwidth)
+    
+    def get_velocity_resolution(self):
+        return self.get_wavelength() * self.chirp_frequency / (2 * self.chirps)
+    
+    def get_max_velocity(self):
+        return self.get_wavelength() * 0.25 * self.chirp_frequency
+    
+    def get_max_range_fixed_if(self, max_if):
+        return max_if / (self.chirp_frequency * 2 * self.bandwidth) * WAVE_VELOCITY
+    
+    def set_chirp_frequency(self, chirp_frequency):
+        self.chirp_frequency = chirp_frequency
+        
+    def set_chirps(self, chirps):
+        self.chirps = chirps
+        
+    def print_parameters(self, max_if):
+        range_res = radar.get_range_resolution()
+        range_max = radar.get_max_range_fixed_if(max_if)
+        vel_max = radar.get_max_velocity()
+        vel_res = radar.get_velocity_resolution()
+        
+        print("Max range : ", range_max)
+        print("Max velocity : ", vel_max)       
+        print("Range resolution : ", range_res)
+        print("Velocity resolution : ", vel_res)
+        print("Range error : ", range_res / range_max * 100)
+        print("Velocity error : ", vel_res / vel_max * 100)
+
+radar = radar_model_fmcw()
+radar.set_transmit_power(47)
+radar.set_antenna_gain(20)
+radar.set_frequency(2.4e9)
+radar.set_bandwidth(100e6)
+radar.set_chirp_frequency(100)
+radar.set_chirps(100)
+
+radar.print_parameters(20e3)
+
+"""
 radar = radar_model()
 
-radar.set_transmit_power(30)
+radar.set_transmit_power(47)
 radar.set_antenna_gain(20)
 radar.set_frequency(440e6)
-radar.set_adc_bits(12)
+radar.set_adc_bits(8)
 radar.set_adc_fullscale(2)
+radar.set_bandwidth(10e6)
+
+print(radar.get_enob())
 
 num_points = 1000
 xpoints = np.empty(num_points)
 ypoints = np.empty(num_points)
 ypoints2 = np.empty(num_points)
 
-step = 30 / num_points
+step = 40 / num_points
 
 for i in range(0, num_points):
     gain = step * (i + 1)
@@ -138,3 +197,4 @@ plt.twinx()
 plt.ylabel("Maximum range (m)")
 plt.plot(xpoints, ypoints2)
 plt.show()
+"""
